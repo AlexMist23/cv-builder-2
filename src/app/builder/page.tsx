@@ -1,45 +1,127 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-
-interface CVData {
-  name: string;
-  email: string;
-  phone: string;
-  summary: string;
-  experience: string;
-  education: string;
-  skills: string;
-}
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "react-beautiful-dnd";
+import { Button } from "@/components/ui/button";
+import CVPreview from "@/components/cv-preview";
+import CVForm from "@/components/cv/form/cv-form";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import { CVData, CVSection } from "@/types/cv";
 
 const defaultCVData: CVData = {
   name: "John Doe",
-  email: "john@example.com",
-  phone: "(123) 456-7890",
-  summary: "Experienced professional with a passion for...",
-  experience: "Company A - Position\nCompany B - Position",
-  education: "University X - Degree\nUniversity Y - Degree",
-  skills: "Skill 1, Skill 2, Skill 3",
+  email: "john.doe@example.com",
+  phone: "+1 (555) 123-4567",
+  summary:
+    "Experienced software developer with a passion for creating efficient and scalable applications.",
+  workExperience: [
+    {
+      id: "1",
+      role: "Senior Software Engineer",
+      company: "Tech Solutions Inc.",
+      startDate: new Date("2018-01-01"),
+      endDate: null,
+      description:
+        "Lead development of cloud-based applications using React and Node.js.",
+    },
+  ],
+  education: [
+    {
+      id: "1",
+      degree: "Bachelor of Science in Computer Science",
+      institution: "University of Technology",
+      startDate: new Date("2010-09-01"),
+      endDate: new Date("2014-06-30"),
+      description: "Focused on software engineering and data structures.",
+    },
+  ],
+  skills: {
+    programmingLanguages: ["JavaScript", "TypeScript", "Python"],
+    backEndTech: ["Node.js", "Express", "Django"],
+    frontEndTech: ["React", "Vue.js", "HTML/CSS"],
+    versionControl: ["Git", "GitHub"],
+    developmentTools: ["VS Code", "Docker"],
+    databases: ["MongoDB", "PostgreSQL"],
+  },
+  projects: [
+    {
+      id: "1",
+      title: "E-commerce Platform",
+      techStack: ["React", "Node.js", "MongoDB"],
+      demo: "https://example-ecommerce.com",
+      repository: "https://github.com/johndoe/ecommerce-platform",
+      description:
+        "Developed a full-stack e-commerce platform with user authentication and payment integration.",
+    },
+  ],
+  courses: [
+    {
+      id: "1",
+      title: "Advanced React Patterns",
+      provider: "Frontend Masters",
+      date: new Date("2022-03-15"),
+      description:
+        "In-depth course on advanced React patterns and best practices.",
+    },
+  ],
+  languages: [
+    {
+      id: "1",
+      name: "English",
+      proficiency: "C2",
+    },
+    {
+      id: "2",
+      name: "Spanish",
+      proficiency: "B2",
+    },
+  ],
+  image: null,
+  personalWebsite: "https://johndoe.dev",
+  linkedin: "https://linkedin.com/in/johndoe",
+  github: "https://github.com/johndoe",
 };
+
+const defaultSections: CVSection[] = [
+  "personalInfo",
+  "summary",
+  "workExperience",
+  "education",
+  "skills",
+  "projects",
+  "courses",
+  "languages",
+];
 
 export default function CVBuilder() {
   const [cvData, setCVData] = useState<CVData>(defaultCVData);
   const [design, setDesign] = useState("classic");
+  const [skillType, setSkillType] = useState("developer");
+  const [sections, setSections] = useState<CVSection[]>(defaultSections);
 
   useEffect(() => {
     const savedData = localStorage.getItem("cvData");
+    const savedSections = localStorage.getItem("cvSections");
+    const savedDesign = localStorage.getItem("cvDesign");
+    const savedSkillType = localStorage.getItem("cvSkillType");
+
     if (savedData) {
       setCVData(JSON.parse(savedData));
+    }
+    if (savedSections) {
+      setSections(JSON.parse(savedSections));
+    }
+    if (savedDesign) {
+      setDesign(savedDesign);
+    }
+    if (savedSkillType) {
+      setSkillType(savedSkillType);
     }
   }, []);
 
@@ -47,136 +129,100 @@ export default function CVBuilder() {
     localStorage.setItem("cvData", JSON.stringify(cvData));
   }, [cvData]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setCVData((prevData) => ({ ...prevData, [name]: value }));
+  useEffect(() => {
+    localStorage.setItem("cvSections", JSON.stringify(sections));
+  }, [sections]);
+
+  useEffect(() => {
+    localStorage.setItem("cvDesign", design);
+  }, [design]);
+
+  useEffect(() => {
+    localStorage.setItem("cvSkillType", skillType);
+  }, [skillType]);
+
+  const handleDownloadPDF = async () => {
+    const element = document.getElementById("cv-preview");
+    if (element) {
+      const canvas = await html2canvas(element, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save("cv.pdf");
+    }
   };
 
-  const handleDesignChange = (value: string) => {
-    setDesign(value);
-  };
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) {
+      return;
+    }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // TODO: image upload logic
+    const newSections = Array.from(sections);
+    const [reorderedItem] = newSections.splice(result.source.index, 1);
+    newSections.splice(result.destination.index, 0, reorderedItem);
+
+    setSections(newSections);
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">CV Builder</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div>
-          <h2 className="text-2xl font-semibold mb-4">Personal Information</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                name="name"
-                value={cvData.name}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={cvData.email}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                name="phone"
-                value={cvData.phone}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="summary">Professional Summary</Label>
-              <Textarea
-                id="summary"
-                name="summary"
-                value={cvData.summary}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="experience">Work Experience</Label>
-              <Textarea
-                id="experience"
-                name="experience"
-                value={cvData.experience}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="education">Education</Label>
-              <Textarea
-                id="education"
-                name="education"
-                value={cvData.education}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="skills">Skills</Label>
-              <Input
-                id="skills"
-                name="skills"
-                value={cvData.skills}
-                onChange={handleInputChange}
-              />
-            </div>
-          </div>
-          <h2 className="text-2xl font-semibold my-4">Design Options</h2>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="design">CV Design</Label>
-              <Select onValueChange={handleDesignChange} defaultValue={design}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a design" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="classic">Classic</SelectItem>
-                  <SelectItem value="modern">Modern</SelectItem>
-                  <SelectItem value="creative">Creative</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="image">Profile Image</Label>
-              <Input
-                id="image"
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-              />
-            </div>
-          </div>
+          <h2 className="text-2xl font-semibold mb-4">CV Sections</h2>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <Droppable droppableId="sections">
+              {(provided) => (
+                <ul
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  className="space-y-2"
+                >
+                  {sections.map((section, index) => (
+                    <Draggable
+                      key={section}
+                      draggableId={section}
+                      index={index}
+                    >
+                      {(provided) => (
+                        <li
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className="bg-secondary text-secondary-foreground p-2 rounded cursor-move"
+                        >
+                          {section}
+                        </li>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </ul>
+              )}
+            </Droppable>
+          </DragDropContext>
+          <CVForm
+            cvData={cvData}
+            setCVData={setCVData}
+            design={design}
+            setDesign={setDesign}
+            skillType={skillType}
+            setSkillType={setSkillType}
+          />
         </div>
         <div>
           <h2 className="text-2xl font-semibold mb-4">CV Preview</h2>
-          <div className="border p-4 rounded-lg">
-            {/* Add CV preview component here */}
-            <h3 className="text-xl font-bold">{cvData.name}</h3>
-            <p>
-              {cvData.email} | {cvData.phone}
-            </p>
-            <h4 className="font-semibold mt-4">Summary</h4>
-            <p>{cvData.summary}</p>
-            <h4 className="font-semibold mt-4">Experience</h4>
-            <p>{cvData.experience}</p>
-            <h4 className="font-semibold mt-4">Education</h4>
-            <p>{cvData.education}</p>
-            <h4 className="font-semibold mt-4">Skills</h4>
-            <p>{cvData.skills}</p>
+          <div className="mb-4">
+            <Button onClick={handleDownloadPDF}>Download PDF</Button>
+          </div>
+          <div
+            id="cv-preview"
+            className="border rounded-lg overflow-hidden"
+            style={{ width: "210mm", height: "297mm" }}
+          >
+            <CVPreview cvData={cvData} design={design} sections={sections} />
           </div>
         </div>
       </div>
